@@ -102,6 +102,7 @@ private slots:
     void onTimeout();
 
 private:
+    void notify();
     void triggerNotification();
     void doScrobble(Track& track);
     void storeScrobbles(const QVariantList& scrobbles);

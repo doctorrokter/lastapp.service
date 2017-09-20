@@ -79,15 +79,23 @@ void Service::init() {
     }
 }
 
+void Service::notify() {
+    Notification::clearEffectsForAll();
+    Notification::deleteAllFromInbox();
+    m_notify->setTitle("Last.app");
+
+    QString notify = m_settings.value("notify_now_playing", "").toString();
+    if (notify.isEmpty() || notify.compare("true") == 0) {
+        m_notify->notify();
+    }
+}
+
 void Service::triggerNotification() {
     m_timer.singleShot(2000, this, SLOT(onTimeout()));
 }
 
 void Service::onTimeout() {
-    Notification::clearEffectsForAll();
-    Notification::deleteAllFromInbox();
-    m_notify->setTitle("Last.app");
-    m_notify->notify();
+    notify();
 }
 
 void Service::nowPlayingChanged(QVariantMap metadata) {
@@ -106,7 +114,7 @@ void Service::nowPlayingChanged(QVariantMap metadata) {
             .append(", ")
             .append(m_track.album)
             );
-    m_notify->notify();
+    notify();
 
     if (m_online) {
         logger.info("Update Now Playing");
@@ -174,9 +182,9 @@ void Service::handleInvoke(const bb::system::InvokeRequest& request) {
             logger.info("Service started OS restart");
             m_initTimer.singleShot(30000, this, SLOT(init()));
         }
+        m_notify->setBody("Started in backgroud");
+        triggerNotification();
     }
-    m_notify->setBody("Started in backgroud");
-    triggerNotification();
 }
 
 void Service::storeScrobbles(const QVariantList& scrobbles) {
