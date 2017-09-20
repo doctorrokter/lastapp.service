@@ -42,6 +42,7 @@ Service::Service() : QObject(),
         m_initialized(false) {
 
     m_invokeManager->connect(m_invokeManager, SIGNAL(invoked(const bb::system::InvokeRequest&)), this, SLOT(handleInvoke(const bb::system::InvokeRequest&)));
+//    m_notify->setType(NotificationType::AllAlertsOff);
 
     NotificationDefaultApplicationSettings settings;
     settings.setPreview(NotificationPriorityPolicy::Allow);
@@ -66,6 +67,8 @@ void Service::init() {
 
         bool result = QObject::connect(m_pNpc, SIGNAL(metaDataChanged(QVariantMap)), this, SLOT(nowPlayingChanged(QVariantMap)));
         Q_ASSERT(result);
+        result = QObject::connect(m_pNpc, SIGNAL(mediaStateChanged(bb::multimedia::MediaState::Type)), this, SLOT(mediaStateChanged(bb::multimedia::MediaState::Type)));
+        Q_ASSERT(result);
 
         result = QObject::connect(m_pNetworkConf, SIGNAL(onlineStateChanged(bool)), this, SLOT(onOnlineChanged(bool)));
         Q_ASSERT(result);
@@ -74,6 +77,17 @@ void Service::init() {
     } else {
         logger.info("Signals and slots already initialized");
     }
+}
+
+void Service::triggerNotification() {
+    m_timer.singleShot(2000, this, SLOT(onTimeout()));
+}
+
+void Service::onTimeout() {
+    Notification::clearEffectsForAll();
+    Notification::deleteAllFromInbox();
+    m_notify->setTitle("Last.app");
+    m_notify->notify();
 }
 
 void Service::nowPlayingChanged(QVariantMap metadata) {
@@ -135,6 +149,13 @@ void Service::onOnlineChanged(bool online) {
     }
 }
 
+void Service::mediaStateChanged(bb::multimedia::MediaState::Type state) {
+    if (state == bb::multimedia::MediaState::Stopped) {
+        logger.info("Stop scrobbling");
+        m_scrobbleTimer.stop();
+    }
+}
+
 void Service::doScrobble(Track& track) {
     logger.info("Do Scrobble");
     logger.info(track.toString());
@@ -154,18 +175,8 @@ void Service::handleInvoke(const bb::system::InvokeRequest& request) {
             m_initTimer.singleShot(30000, this, SLOT(init()));
         }
     }
+    m_notify->setBody("Started in backgroud");
     triggerNotification();
-}
-
-void Service::triggerNotification() {
-    m_timer.singleShot(2000, this, SLOT(onTimeout()));
-}
-
-void Service::onTimeout() {
-    Notification::clearEffectsForAll();
-    Notification::deleteAllFromInbox();
-    m_notify->setTitle("Last.app");
-    m_notify->notify();
 }
 
 void Service::storeScrobbles(const QVariantList& scrobbles) {

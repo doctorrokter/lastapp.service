@@ -22,6 +22,7 @@
 #include <QVariantList>
 #include <QSettings>
 #include <bb/multimedia/NowPlayingController>
+#include <bb/multimedia/MediaState>
 #include <QNetworkConfigurationManager>
 #include <QTimer>
 #include "lastfm/LastFM.hpp"
@@ -95,9 +96,10 @@ private slots:
     void init();
     void handleInvoke(const bb::system::InvokeRequest& request);
     void nowPlayingChanged(QVariantMap metadata);
-    void onTimeout();
     void scrobble();
     void onOnlineChanged(bool online);
+    void mediaStateChanged(bb::multimedia::MediaState::Type state);
+    void onTimeout();
 
 private:
     void triggerNotification();
