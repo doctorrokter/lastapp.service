@@ -1,0 +1,1 @@
+include (../LastappService.pro)
