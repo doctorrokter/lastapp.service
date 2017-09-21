@@ -5,11 +5,9 @@ device {
     CONFIG(debug, debug|release) {
         profile {
             CONFIG += \
-                config_pri_assets \
                 config_pri_source_group1
         } else {
             CONFIG += \
-                config_pri_assets \
                 config_pri_source_group1
         }
 
@@ -18,7 +16,6 @@ device {
     CONFIG(release, debug|release) {
         !profile {
             CONFIG += \
-                config_pri_assets \
                 config_pri_source_group1
         }
     }
@@ -28,14 +25,9 @@ simulator {
     CONFIG(debug, debug|release) {
         !profile {
             CONFIG += \
-                config_pri_assets \
                 config_pri_source_group1
         }
     }
-}
-
-config_pri_assets {
-    OTHER_FILES += $$quote($$BASEDIR/assets/main.qml)
 }
 
 config_pri_source_group1 {
@@ -76,10 +68,7 @@ lupdate_inclusion {
         $$quote($$BASEDIR/../src/vendor/*.c++) \
         $$quote($$BASEDIR/../src/vendor/*.cc) \
         $$quote($$BASEDIR/../src/vendor/*.cpp) \
-        $$quote($$BASEDIR/../src/vendor/*.cxx) \
-        $$quote($$BASEDIR/../assets/*.qml) \
-        $$quote($$BASEDIR/../assets/*.js) \
-        $$quote($$BASEDIR/../assets/*.qs)
+        $$quote($$BASEDIR/../src/vendor/*.cxx)
 
     HEADERS += \
         $$quote($$BASEDIR/../src/*.h) \
