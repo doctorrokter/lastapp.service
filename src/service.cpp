@@ -42,7 +42,7 @@ Service::Service() : QObject(),
         m_initialized(false) {
 
     m_invokeManager->connect(m_invokeManager, SIGNAL(invoked(const bb::system::InvokeRequest&)), this, SLOT(handleInvoke(const bb::system::InvokeRequest&)));
-//    m_notify->setType(NotificationType::AllAlertsOff);
+    m_notify->setType(NotificationType::AllAlertsOff);
 
     NotificationDefaultApplicationSettings settings;
     settings.setPreview(NotificationPriorityPolicy::Allow);
