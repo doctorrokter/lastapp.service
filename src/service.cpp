@@ -25,6 +25,8 @@
 #include <bb/data/JsonDataAccess>
 #include <QFile>
 
+#define SCROBBLE_AFTER 60000
+
 using namespace bb::platform;
 using namespace bb::system;
 using namespace bb::multimedia;
@@ -39,7 +41,8 @@ Service::Service() : QObject(),
         m_pNetworkConf(new QNetworkConfigurationManager(this)),
         m_pLastFM(new LastFM(this)),
         m_online(true),
-        m_initialized(false) {
+        m_initialized(false),
+        m_scrobblerEnabled(true) {
 
     m_invokeManager->connect(m_invokeManager, SIGNAL(invoked(const bb::system::InvokeRequest&)), this, SLOT(handleInvoke(const bb::system::InvokeRequest&)));
     m_notify->setType(NotificationType::AllAlertsOff);
@@ -63,6 +66,7 @@ Service::~Service() {
 void Service::init() {
     if (!m_initialized) {
         logger.info("Initialize Service signals and slots");
+        m_scrobblerEnabled = m_settings.value("scrobbler_enabled", "true").toBool();
         m_online = m_pNetworkConf->isOnline();
 
         bool result = QObject::connect(m_pNpc, SIGNAL(metaDataChanged(QVariantMap)), this, SLOT(nowPlayingChanged(QVariantMap)));
@@ -99,33 +103,35 @@ void Service::onTimeout() {
 }
 
 void Service::nowPlayingChanged(QVariantMap metadata) {
-    m_scrobbleTimer.stop();
+    if (m_scrobblerEnabled) {
+        m_scrobbleTimer.stop();
 
-    m_track.artist = metadata.value(MetaData::Artist, "").toString();
-    m_track.name = metadata.value(MetaData::Title, "").toString();
-    m_track.album = metadata.value(MetaData::Album, "").toString();
-    m_track.duration = metadata.value(MetaData::Duration, 0).toInt();
-    m_track.scrobbled = false;
-    m_track.timestamp = QDateTime::currentDateTimeUtc().toTime_t();
-    m_notify->setBody(
-            QString(m_track.artist)
-            .append(" - ")
-            .append(m_track.name)
-            .append(", ")
-            .append(m_track.album)
-            );
-    notify();
+        m_track.artist = metadata.value(MetaData::Artist, "").toString();
+        m_track.name = metadata.value(MetaData::Title, "").toString();
+        m_track.album = metadata.value(MetaData::Album, "").toString();
+        m_track.duration = metadata.value(MetaData::Duration, 0).toInt();
+        m_track.scrobbled = false;
+        m_track.timestamp = QDateTime::currentDateTimeUtc().toTime_t();
+        m_notify->setBody(
+                QString(m_track.artist)
+                .append(" - ")
+                .append(m_track.name)
+                .append(", ")
+                .append(m_track.album)
+        );
+        notify();
 
-    if (m_online) {
-        logger.info("Update Now Playing");
-        logger.info(m_track.toString());
-        m_pLastFM->getTrackController()->updateNowPlaying(m_track.artist, m_track.name, m_track.album);
-    } else {
-        logger.info("App offline for updating now playing");
+        if (m_online) {
+            logger.info("Update Now Playing");
+            logger.info(m_track.toString());
+            m_pLastFM->getTrackController()->updateNowPlaying(m_track.artist, m_track.name, m_track.album);
+        } else {
+            logger.info("App offline for updating now playing");
+        }
+
+        int interval = m_track.duration == 0 ? SCROBBLE_AFTER : m_track.duration / 2;
+        m_scrobbleTimer.singleShot(interval, this, SLOT(scrobble()));
     }
-
-    int interval = m_track.duration == 0 ? 45 * 1000 : m_track.duration / 2;
-    m_scrobbleTimer.singleShot(interval, this, SLOT(scrobble()));
 }
 
 void Service::scrobble() {
@@ -133,10 +139,12 @@ void Service::scrobble() {
         if (m_online) {
             doScrobble(m_track);
         } else {
-            logger.info("App offline for scrobbling");
-            QVariantList list = restoreScrobbles();
-            list.append(m_track.toMap());
-            storeScrobbles(list);
+            if (m_scrobblerEnabled) {
+                logger.info("App offline for scrobbling");
+                QVariantList list = restoreScrobbles();
+                list.append(m_track.toMap());
+                storeScrobbles(list);
+            }
         }
     }
 }
@@ -165,16 +173,32 @@ void Service::mediaStateChanged(bb::multimedia::MediaState::Type state) {
 }
 
 void Service::doScrobble(Track& track) {
-    logger.info("Do Scrobble");
-    logger.info(track.toString());
-    m_pLastFM->getTrackController()->scrobble(track.artist, track.name, track.timestamp, track.album);
-    track.scrobbled = true;
+    if (m_scrobblerEnabled) {
+        logger.info("Do Scrobble");
+        logger.info(track.toString());
+        m_pLastFM->getTrackController()->scrobble(track.artist, track.name, track.timestamp, track.album);
+        track.scrobbled = true;
+    }
 }
 
 void Service::handleInvoke(const bb::system::InvokeRequest& request) {
     QString action = request.action();
     logger.info(action);
-    if (action.compare("chachkouski.LastappService.START") == 0 || action.compare("bb.action.RESTART") == 0) {
+
+    if (action.compare("bb.action.SHORTCUT") == 0) {
+        m_scrobblerEnabled = !m_scrobblerEnabled;
+        if (!m_scrobblerEnabled) {
+            m_scrobbleTimer.stop();
+        }
+        m_settings.setProperty("scrobbler_enabled", m_scrobblerEnabled);
+        m_settings.sync();
+
+        m_notify->setType(NotificationType::Default);
+        m_notify->setBody(QString("Scrobbler ").append(m_scrobblerEnabled ? "on" : "off"));
+        m_notify->notify();
+        m_notify->setType(NotificationType::AllAlertsOff);
+
+    } else if (action.compare("chachkouski.LastappService.START") == 0 || action.compare("bb.action.RESTART") == 0) {
         logger.info("Service started by UI part");
         init();
     } else {

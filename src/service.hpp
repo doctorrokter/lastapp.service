@@ -121,6 +121,7 @@ private:
     QTimer m_scrobbleTimer;
     QTimer m_initTimer;
     bool m_initialized;
+    bool m_scrobblerEnabled;
 
     static Logger logger;
 };
