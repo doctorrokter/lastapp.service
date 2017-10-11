@@ -26,6 +26,8 @@
 #include <QFile>
 
 #define SCROBBLE_AFTER 60000
+#define SCROBBLER_ENABLE "scrobbler.enable"
+#define SCROBBLER_DISABLE "scrobbler.disable"
 
 using namespace bb::platform;
 using namespace bb::system;
@@ -40,9 +42,13 @@ Service::Service() : QObject(),
         m_pNpc(new NowPlayingController(this)),
         m_pNetworkConf(new QNetworkConfigurationManager(this)),
         m_pLastFM(new LastFM(this)),
+        m_pCommunication(NULL),
         m_online(true),
         m_initialized(false),
         m_scrobblerEnabled(true) {
+
+    QCoreApplication::setOrganizationName("mikhail.chachkouski");
+    QCoreApplication::setApplicationName("Last.app");
 
     m_invokeManager->connect(m_invokeManager, SIGNAL(invoked(const bb::system::InvokeRequest&)), this, SLOT(handleInvoke(const bb::system::InvokeRequest&)));
     m_notify->setType(NotificationType::AllAlertsOff);
@@ -60,6 +66,9 @@ Service::~Service() {
     m_pNpc->deleteLater();
     m_invokeManager->deleteLater();
     m_notify->deleteLater();
+    if (m_pCommunication != NULL) {
+        m_pCommunication->deleteLater();
+    }
     logger.info("Service DESTROYED!!!");
 }
 
@@ -190,17 +199,11 @@ void Service::handleInvoke(const bb::system::InvokeRequest& request) {
         if (!m_scrobblerEnabled) {
             m_scrobbleTimer.stop();
         }
-        m_settings.setProperty("scrobbler_enabled", m_scrobblerEnabled);
-        m_settings.sync();
-
-        m_notify->setType(NotificationType::Default);
-        m_notify->setBody(QString("Scrobbler ").append(m_scrobblerEnabled ? "on" : "off"));
-        m_notify->notify();
-        m_notify->setType(NotificationType::AllAlertsOff);
-
+        switchScrobbler();
     } else if (action.compare("chachkouski.LastappService.START") == 0 || action.compare("bb.action.RESTART") == 0) {
         logger.info("Service started by UI part");
         init();
+        establishCommunication();
     } else {
         if (action.compare("bb.action.system.STARTED") == 0) {
             logger.info("Service started OS restart");
@@ -232,4 +235,62 @@ QVariantList Service::restoreScrobbles() {
     logger.info("Scrobbles restored");
     logger.info(list);
     return list;
+}
+
+void Service::processCommandFromUI(const QString& command) {
+    if (command.compare(SCROBBLER_ENABLE) == 0) {
+        if (!m_scrobblerEnabled) {
+            m_scrobblerEnabled = true;
+            switchScrobbler(true);
+        }
+
+    } else if (command.compare(SCROBBLER_DISABLE) == 0) {
+        if (m_scrobblerEnabled) {
+            m_scrobblerEnabled = false;
+            switchScrobbler(true);
+        }
+    }
+}
+
+void Service::switchScrobbler(const bool& fromUI) {
+    m_settings.setProperty("scrobbler_enabled", m_scrobblerEnabled);
+    m_settings.sync();
+
+    if (!fromUI) {
+        if (m_pCommunication != NULL) {
+            if (m_scrobblerEnabled) {
+                m_pCommunication->send(SCROBBLER_ENABLE);
+            } else {
+                m_pCommunication->send(SCROBBLER_DISABLE);
+            }
+        }
+    }
+
+    m_notify->setType(NotificationType::Default);
+    m_notify->setBody(QString("Scrobbler ").append(m_scrobblerEnabled ? "on" : "off"));
+    m_notify->notify();
+    m_notify->setType(NotificationType::AllAlertsOff);
+}
+
+void Service::establishCommunication() {
+    if (m_pCommunication == NULL) {
+        m_pCommunication = new HeadlessCommunication(this);
+        m_pCommunication->connect();
+        bool res = QObject::connect(m_pCommunication, SIGNAL(closed()), this, SLOT(closeCommunication()));
+        Q_ASSERT(res);
+        res = QObject::connect(m_pCommunication, SIGNAL(commandReceived(const QString&)), this, SLOT(processCommandFromUI(const QString&)));
+        Q_ASSERT(res);
+        Q_UNUSED(res);
+    }
+}
+
+void Service::closeCommunication() {
+    if (m_pCommunication != NULL) {
+        bool res = QObject::disconnect(m_pCommunication, SIGNAL(closed()), this, SLOT(closeCommunication()));
+        Q_ASSERT(true);
+        res = QObject::disconnect(m_pCommunication, SIGNAL(commandReceived(const QString&)), this, SLOT(processCommandFromUI(const QString&)));
+        Q_ASSERT(true);
+        Q_UNUSED(res);
+        m_pCommunication->deleteLater();
+    }
 }
