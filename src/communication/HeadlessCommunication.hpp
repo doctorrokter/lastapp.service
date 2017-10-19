@@ -22,12 +22,13 @@ public:
     void send(const QString& command);
 
     Q_SIGNALS:
+        void connected();
         void commandReceived(const QString& command);
         void closed();
 
 private slots:
-    void connected();
-    void disconnected();
+    void onConnected();
+    void onDisconnected();
     void readyRead();
 
 private:

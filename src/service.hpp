@@ -103,6 +103,7 @@ private slots:
     void onTimeout();
     void processCommandFromUI(const QString& command);
     void closeCommunication();
+    void onConnectedWithUI();
 
 private:
     void notify();
@@ -122,7 +123,6 @@ private:
 
     Track m_track;
     bool m_online;
-    QSettings m_settings;
     QTimer m_timer;
     QTimer m_scrobbleTimer;
     QTimer m_initTimer;

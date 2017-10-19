@@ -24,10 +24,14 @@
 #include <QDateTime>
 #include <bb/data/JsonDataAccess>
 #include <QFile>
+#include "Settings.hpp"
+#include <QSettings>
 
 #define SCROBBLE_AFTER 60000
 #define SCROBBLER_ENABLE "scrobbler.enable"
 #define SCROBBLER_DISABLE "scrobbler.disable"
+#define SETTINGS_SCROBBLER_KEY "scrobbler.enabled"
+#define SETTINGS_NOW_PLAYING_KEY "notify_now_playing"
 
 using namespace bb::platform;
 using namespace bb::system;
@@ -44,11 +48,13 @@ Service::Service() : QObject(),
         m_pLastFM(new LastFM(this)),
         m_pCommunication(NULL),
         m_online(true),
-        m_initialized(false),
-        m_scrobblerEnabled(true) {
+        m_initialized(false) {
 
     QCoreApplication::setOrganizationName("mikhail.chachkouski");
-    QCoreApplication::setApplicationName("Last.app");
+    QCoreApplication::setApplicationName("LastappService");
+
+    Settings appSettings;
+    m_scrobblerEnabled = appSettings.value(SETTINGS_SCROBBLER_KEY, 1).toBool();
 
     m_invokeManager->connect(m_invokeManager, SIGNAL(invoked(const bb::system::InvokeRequest&)), this, SLOT(handleInvoke(const bb::system::InvokeRequest&)));
     m_notify->setType(NotificationType::AllAlertsOff);
@@ -67,7 +73,8 @@ Service::~Service() {
     m_invokeManager->deleteLater();
     m_notify->deleteLater();
     if (m_pCommunication != NULL) {
-        m_pCommunication->deleteLater();
+        delete m_pCommunication;
+        m_pCommunication = NULL;
     }
     logger.info("Service DESTROYED!!!");
 }
@@ -75,7 +82,6 @@ Service::~Service() {
 void Service::init() {
     if (!m_initialized) {
         logger.info("Initialize Service signals and slots");
-        m_scrobblerEnabled = m_settings.value("scrobbler_enabled", "true").toBool();
         m_online = m_pNetworkConf->isOnline();
 
         bool result = QObject::connect(m_pNpc, SIGNAL(metaDataChanged(QVariantMap)), this, SLOT(nowPlayingChanged(QVariantMap)));
@@ -97,7 +103,8 @@ void Service::notify() {
     Notification::deleteAllFromInbox();
     m_notify->setTitle("Last.app");
 
-    QString notify = m_settings.value("notify_now_playing", "").toString();
+    QSettings appSettings;
+    QString notify = appSettings.value(SETTINGS_NOW_PLAYING_KEY, "").toString();
     if (notify.isEmpty() || notify.compare("true") == 0) {
         m_notify->notify();
     }
@@ -253,8 +260,8 @@ void Service::processCommandFromUI(const QString& command) {
 }
 
 void Service::switchScrobbler(const bool& fromUI) {
-    m_settings.setProperty("scrobbler_enabled", m_scrobblerEnabled);
-    m_settings.sync();
+    Settings appSettings;
+    appSettings.setValue(SETTINGS_SCROBBLER_KEY, m_scrobblerEnabled);
 
     if (!fromUI) {
         if (m_pCommunication != NULL) {
@@ -280,17 +287,30 @@ void Service::establishCommunication() {
         Q_ASSERT(res);
         res = QObject::connect(m_pCommunication, SIGNAL(commandReceived(const QString&)), this, SLOT(processCommandFromUI(const QString&)));
         Q_ASSERT(res);
+        res = QObject::connect(m_pCommunication, SIGNAL(connected()), this, SLOT(onConnectedWithUI()));
+        Q_ASSERT(res);
         Q_UNUSED(res);
+    }
+}
+
+void Service::onConnectedWithUI() {
+    if (m_scrobblerEnabled) {
+        m_pCommunication->send(SCROBBLER_ENABLE);
+    } else {
+        m_pCommunication->send(SCROBBLER_DISABLE);
     }
 }
 
 void Service::closeCommunication() {
     if (m_pCommunication != NULL) {
         bool res = QObject::disconnect(m_pCommunication, SIGNAL(closed()), this, SLOT(closeCommunication()));
-        Q_ASSERT(true);
+        Q_ASSERT(res);
         res = QObject::disconnect(m_pCommunication, SIGNAL(commandReceived(const QString&)), this, SLOT(processCommandFromUI(const QString&)));
-        Q_ASSERT(true);
+        Q_ASSERT(res);
+        res = QObject::disconnect(m_pCommunication, SIGNAL(connected()), this, SLOT(onConnectedWithUI()));
+        Q_ASSERT(res);
         Q_UNUSED(res);
-        m_pCommunication->deleteLater();
+        delete m_pCommunication;
+        m_pCommunication = NULL;
     }
 }

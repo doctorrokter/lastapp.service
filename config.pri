@@ -33,6 +33,7 @@ simulator {
 config_pri_source_group1 {
     SOURCES += \
         $$quote($$BASEDIR/src/Logger.cpp) \
+        $$quote($$BASEDIR/src/Settings.cpp) \
         $$quote($$BASEDIR/src/communication/HeadlessCommunication.cpp) \
         $$quote($$BASEDIR/src/lastfm/LastFM.cpp) \
         $$quote($$BASEDIR/src/lastfm/TrackController.cpp) \
@@ -42,6 +43,7 @@ config_pri_source_group1 {
 
     HEADERS += \
         $$quote($$BASEDIR/src/Logger.hpp) \
+        $$quote($$BASEDIR/src/Settings.hpp) \
         $$quote($$BASEDIR/src/communication/HeadlessCommunication.hpp) \
         $$quote($$BASEDIR/src/lastfm/LastFM.hpp) \
         $$quote($$BASEDIR/src/lastfm/LastFMCommon.hpp) \
