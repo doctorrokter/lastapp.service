@@ -111,6 +111,7 @@ private:
     void doScrobble(Track& track);
     void storeScrobbles(const QVariantList& scrobbles);
     void switchScrobbler(const bool& fromUI = false);
+    void switchHubNotifications(const bool& fromUI = false);
     void establishCommunication();
     QVariantList restoreScrobbles();
 
@@ -128,6 +129,7 @@ private:
     QTimer m_initTimer;
     bool m_initialized;
     bool m_scrobblerEnabled;
+    bool m_notificationsEnabled;
 
     static Logger logger;
 };

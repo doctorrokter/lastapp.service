@@ -11,6 +11,7 @@
 #include <QUrl>
 #include <QVariantList>
 #include <QNetworkReply>
+#include <QDebug>
 
 class Logger: public QObject {
     Q_OBJECT
@@ -23,16 +24,30 @@ public:
 
     const QString& getClass() const;
 
-    void info(const QString& message);
-    void info(const QUrl& url);
-    void info(const QVariantList& list);
-    void error(const QNetworkReply::NetworkError e);
-    void error(const QString& error);
+    template <typename T> void info(const T& t) {
+        log("INFO", t);
+    }
+
+    template <typename T> void error(const T& t) {
+        log("ERROR", t);
+    }
+
+    template <typename T> void debug(const T& t) {
+        log("DEBUG", t);
+    }
+
+    template <typename T> void warn(const T& t) {
+        log("WARN", t);
+    }
 
 private:
     QString m_class;
 
     QString currDateString();
+
+    template <typename T> void log(const QString& level, const T& t) {
+        qDebug() << "[" << level << "]" << "[" << currDateString() << "] -" << m_class << "-" << t << endl;
+    }
 };
 
 #endif /* LOGGER_HPP_ */

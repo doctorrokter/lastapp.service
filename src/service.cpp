@@ -30,6 +30,8 @@
 #define SCROBBLE_AFTER 60000
 #define SCROBBLER_ENABLE "scrobbler.enable"
 #define SCROBBLER_DISABLE "scrobbler.disable"
+#define HUB_NOTIFICATIONS_ENABLE "hub.notifications.enable"
+#define HUB_NOTIFICATIONS_DISABLE "hub.notifications.disable"
 #define SETTINGS_SCROBBLER_KEY "scrobbler.enabled"
 #define SETTINGS_NOW_PLAYING_KEY "notify_now_playing"
 
@@ -55,6 +57,7 @@ Service::Service() : QObject(),
 
     Settings appSettings;
     m_scrobblerEnabled = appSettings.value(SETTINGS_SCROBBLER_KEY, 1).toBool();
+    m_notificationsEnabled = appSettings.value(SETTINGS_NOW_PLAYING_KEY, 1).toBool();
 
     m_invokeManager->connect(m_invokeManager, SIGNAL(invoked(const bb::system::InvokeRequest&)), this, SLOT(handleInvoke(const bb::system::InvokeRequest&)));
     m_notify->setType(NotificationType::AllAlertsOff);
@@ -103,9 +106,7 @@ void Service::notify() {
     Notification::deleteAllFromInbox();
     m_notify->setTitle("Last.app");
 
-    QSettings appSettings;
-    QString notify = appSettings.value(SETTINGS_NOW_PLAYING_KEY, "").toString();
-    if (notify.isEmpty() || notify.compare("true") == 0) {
+    if (m_notificationsEnabled) {
         m_notify->notify();
     }
 }
@@ -250,11 +251,20 @@ void Service::processCommandFromUI(const QString& command) {
             m_scrobblerEnabled = true;
             switchScrobbler(true);
         }
-
     } else if (command.compare(SCROBBLER_DISABLE) == 0) {
         if (m_scrobblerEnabled) {
             m_scrobblerEnabled = false;
             switchScrobbler(true);
+        }
+    } else if (command.compare(HUB_NOTIFICATIONS_ENABLE) == 0) {
+        if (!m_notificationsEnabled) {
+            m_notificationsEnabled = true;
+            switchHubNotifications(true);
+        }
+    } else if (command.compare(HUB_NOTIFICATIONS_DISABLE) == 0) {
+        if (m_notificationsEnabled) {
+            m_notificationsEnabled = false;
+            switchHubNotifications(true);
         }
     }
 }
@@ -279,6 +289,25 @@ void Service::switchScrobbler(const bool& fromUI) {
     m_notify->setType(NotificationType::AllAlertsOff);
 }
 
+void Service::switchHubNotifications(const bool& fromUI) {
+    Settings appSettings;
+    appSettings.setValue(SETTINGS_NOW_PLAYING_KEY, m_notificationsEnabled);
+
+    if (!m_notificationsEnabled) {
+        m_notify->deleteAllFromInbox();
+    }
+
+    if (!fromUI) {
+        if (m_pCommunication != NULL) {
+            if (m_notificationsEnabled) {
+                m_pCommunication->send(HUB_NOTIFICATIONS_ENABLE);
+            } else {
+                m_pCommunication->send(HUB_NOTIFICATIONS_DISABLE);
+            }
+        }
+    }
+}
+
 void Service::establishCommunication() {
     if (m_pCommunication == NULL) {
         m_pCommunication = new HeadlessCommunication(this);
@@ -294,11 +323,8 @@ void Service::establishCommunication() {
 }
 
 void Service::onConnectedWithUI() {
-    if (m_scrobblerEnabled) {
-        m_pCommunication->send(SCROBBLER_ENABLE);
-    } else {
-        m_pCommunication->send(SCROBBLER_DISABLE);
-    }
+    m_pCommunication->send(m_scrobblerEnabled ? SCROBBLER_ENABLE : SCROBBLER_DISABLE);
+    m_pCommunication->send(m_notificationsEnabled ? HUB_NOTIFICATIONS_ENABLE : HUB_NOTIFICATIONS_DISABLE);
 }
 
 void Service::closeCommunication() {
