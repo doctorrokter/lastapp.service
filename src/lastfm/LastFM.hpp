@@ -23,11 +23,13 @@ namespace bb {
         class LastFM: public QObject {
             Q_OBJECT
         public:
-            LastFM(QObject* parent = 0);
+            LastFM(const QString& accessToken = "", QObject* parent = 0);
             virtual ~LastFM();
 
             static QUrl defaultUrl(const QString& method);
             static QUrl defaultBody(const QString& method);
+
+            void setAccessToken(const QString& accessToken);
 
             TrackController* getTrackController() const;
 

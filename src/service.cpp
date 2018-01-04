@@ -24,14 +24,10 @@
 #include <QDateTime>
 #include <bb/data/JsonDataAccess>
 #include <QFile>
-#include "Settings.hpp"
 #include <QSettings>
 
+#define LAST_FM_KEY "lastfm_key"
 #define SCROBBLE_AFTER 60000
-#define SCROBBLER_ENABLE "scrobbler.enable"
-#define SCROBBLER_DISABLE "scrobbler.disable"
-#define HUB_NOTIFICATIONS_ENABLE "hub.notifications.enable"
-#define HUB_NOTIFICATIONS_DISABLE "hub.notifications.disable"
 #define SETTINGS_SCROBBLER_KEY "scrobbler.enabled"
 #define SETTINGS_NOW_PLAYING_KEY "notify_now_playing"
 
@@ -47,24 +43,35 @@ Service::Service() : QObject(),
         m_invokeManager(new InvokeManager(this)),
         m_pNpc(new NowPlayingController(this)),
         m_pNetworkConf(new QNetworkConfigurationManager(this)),
-        m_pLastFM(new LastFM(this)),
-        m_pCommunication(NULL),
+        m_pLastFM(new LastFM("", this)),
+        m_pWatcher(new QFileSystemWatcher(this)),
         m_online(true),
         m_initialized(false) {
 
     QCoreApplication::setOrganizationName("mikhail.chachkouski");
-    QCoreApplication::setApplicationName("LastappService");
-
-    Settings appSettings;
-    m_scrobblerEnabled = appSettings.value(SETTINGS_SCROBBLER_KEY, 1).toBool();
-    m_notificationsEnabled = appSettings.value(SETTINGS_NOW_PLAYING_KEY, 1).toBool();
+    QCoreApplication::setApplicationName("Lastapp");
 
     m_invokeManager->connect(m_invokeManager, SIGNAL(invoked(const bb::system::InvokeRequest&)), this, SLOT(handleInvoke(const bb::system::InvokeRequest&)));
-    m_notify->setType(NotificationType::AllAlertsOff);
+    bool res = QObject::connect(m_pWatcher, SIGNAL(fileChanged(const QString&)), this, SLOT(onFileChanged(const QString&)));
+    Q_ASSERT(res);
+    Q_UNUSED(res);
 
+    m_notify->setType(NotificationType::AllAlertsOff);
     NotificationDefaultApplicationSettings settings;
     settings.setPreview(NotificationPriorityPolicy::Allow);
     settings.apply();
+
+    QSettings qsettings;
+    qsettings.setValue("headless.started", true);
+    qsettings.sync();
+
+    m_scrobblerEnabled = qsettings.value(SETTINGS_SCROBBLER_KEY, true).toBool();
+    m_notificationsEnabled = qsettings.value(SETTINGS_NOW_PLAYING_KEY, true).toBool();
+
+    QString accessToken = qsettings.value(LAST_FM_KEY, "").toString();
+    m_pLastFM->setAccessToken(accessToken);
+
+    m_pWatcher->addPath(qsettings.fileName());
 
     logger.info("Constructor called");
 }
@@ -75,10 +82,7 @@ Service::~Service() {
     m_pNpc->deleteLater();
     m_invokeManager->deleteLater();
     m_notify->deleteLater();
-    if (m_pCommunication != NULL) {
-        delete m_pCommunication;
-        m_pCommunication = NULL;
-    }
+    m_pWatcher->deleteLater();
     logger.info("Service DESTROYED!!!");
 }
 
@@ -117,6 +121,23 @@ void Service::triggerNotification() {
 
 void Service::onTimeout() {
     notify();
+}
+
+void Service::onFileChanged(const QString& path) {
+    logger.debug("File changed: " + path);
+    if (path.contains(".conf")) {
+        logger.debug("Settings changed!");
+        QSettings qsettings;
+        bool sEnabled = qsettings.value(SETTINGS_SCROBBLER_KEY, true).toBool();
+        if (sEnabled != m_scrobblerEnabled) {
+            m_scrobblerEnabled = sEnabled;
+            switchScrobbler();
+        }
+        m_notificationsEnabled = qsettings.value(SETTINGS_NOW_PLAYING_KEY, true).toBool();
+        QString accessToken = qsettings.value(LAST_FM_KEY, "").toString();
+        m_pLastFM->setAccessToken(accessToken);
+        logger.debug("LastFM key: " + accessToken);
+    }
 }
 
 void Service::nowPlayingChanged(QVariantMap metadata) {
@@ -207,17 +228,19 @@ void Service::handleInvoke(const bb::system::InvokeRequest& request) {
         if (!m_scrobblerEnabled) {
             m_scrobbleTimer.stop();
         }
+        QSettings qsettings;
+        qsettings.setValue(SETTINGS_SCROBBLER_KEY, m_scrobblerEnabled);
+        qsettings.sync();
         switchScrobbler();
     } else if (action.compare("chachkouski.LastappService.START") == 0 || action.compare("bb.action.RESTART") == 0) {
         logger.info("Service started by UI part");
         init();
-        establishCommunication();
     } else {
         if (action.compare("bb.action.system.STARTED") == 0) {
             logger.info("Service started OS restart");
             m_initTimer.singleShot(30000, this, SLOT(init()));
         }
-        m_notify->setBody("Started in backgroud");
+        m_notify->setBody("Started in background");
         triggerNotification();
     }
 }
@@ -245,98 +268,10 @@ QVariantList Service::restoreScrobbles() {
     return list;
 }
 
-void Service::processCommandFromUI(const QString& command) {
-    if (command.compare(SCROBBLER_ENABLE) == 0) {
-        if (!m_scrobblerEnabled) {
-            m_scrobblerEnabled = true;
-            switchScrobbler(true);
-        }
-    } else if (command.compare(SCROBBLER_DISABLE) == 0) {
-        if (m_scrobblerEnabled) {
-            m_scrobblerEnabled = false;
-            switchScrobbler(true);
-        }
-    } else if (command.compare(HUB_NOTIFICATIONS_ENABLE) == 0) {
-        if (!m_notificationsEnabled) {
-            m_notificationsEnabled = true;
-            switchHubNotifications(true);
-        }
-    } else if (command.compare(HUB_NOTIFICATIONS_DISABLE) == 0) {
-        if (m_notificationsEnabled) {
-            m_notificationsEnabled = false;
-            switchHubNotifications(true);
-        }
-    }
-}
-
-void Service::switchScrobbler(const bool& fromUI) {
-    Settings appSettings;
-    appSettings.setValue(SETTINGS_SCROBBLER_KEY, m_scrobblerEnabled);
-
-    if (!fromUI) {
-        if (m_pCommunication != NULL) {
-            if (m_scrobblerEnabled) {
-                m_pCommunication->send(SCROBBLER_ENABLE);
-            } else {
-                m_pCommunication->send(SCROBBLER_DISABLE);
-            }
-        }
-    }
-
+void Service::switchScrobbler() {
+    m_notify->deleteAllFromInbox();
     m_notify->setType(NotificationType::Default);
     m_notify->setBody(QString("Scrobbler ").append(m_scrobblerEnabled ? "on" : "off"));
     m_notify->notify();
     m_notify->setType(NotificationType::AllAlertsOff);
-}
-
-void Service::switchHubNotifications(const bool& fromUI) {
-    Settings appSettings;
-    appSettings.setValue(SETTINGS_NOW_PLAYING_KEY, m_notificationsEnabled);
-
-    if (!m_notificationsEnabled) {
-        m_notify->deleteAllFromInbox();
-    }
-
-    if (!fromUI) {
-        if (m_pCommunication != NULL) {
-            if (m_notificationsEnabled) {
-                m_pCommunication->send(HUB_NOTIFICATIONS_ENABLE);
-            } else {
-                m_pCommunication->send(HUB_NOTIFICATIONS_DISABLE);
-            }
-        }
-    }
-}
-
-void Service::establishCommunication() {
-    if (m_pCommunication == NULL) {
-        m_pCommunication = new HeadlessCommunication(this);
-        m_pCommunication->connect();
-        bool res = QObject::connect(m_pCommunication, SIGNAL(closed()), this, SLOT(closeCommunication()));
-        Q_ASSERT(res);
-        res = QObject::connect(m_pCommunication, SIGNAL(commandReceived(const QString&)), this, SLOT(processCommandFromUI(const QString&)));
-        Q_ASSERT(res);
-        res = QObject::connect(m_pCommunication, SIGNAL(connected()), this, SLOT(onConnectedWithUI()));
-        Q_ASSERT(res);
-        Q_UNUSED(res);
-    }
-}
-
-void Service::onConnectedWithUI() {
-    m_pCommunication->send(m_scrobblerEnabled ? SCROBBLER_ENABLE : SCROBBLER_DISABLE);
-    m_pCommunication->send(m_notificationsEnabled ? HUB_NOTIFICATIONS_ENABLE : HUB_NOTIFICATIONS_DISABLE);
-}
-
-void Service::closeCommunication() {
-    if (m_pCommunication != NULL) {
-        bool res = QObject::disconnect(m_pCommunication, SIGNAL(closed()), this, SLOT(closeCommunication()));
-        Q_ASSERT(res);
-        res = QObject::disconnect(m_pCommunication, SIGNAL(commandReceived(const QString&)), this, SLOT(processCommandFromUI(const QString&)));
-        Q_ASSERT(res);
-        res = QObject::disconnect(m_pCommunication, SIGNAL(connected()), this, SLOT(onConnectedWithUI()));
-        Q_ASSERT(res);
-        Q_UNUSED(res);
-        delete m_pCommunication;
-        m_pCommunication = NULL;
-    }
 }

@@ -21,12 +21,16 @@ namespace bb {
 
             Logger TrackController::logger = Logger::getLogger("TrackController");
 
-            TrackController::TrackController(QObject* parent) : QObject(parent) {
+            TrackController::TrackController(const QString& accessToken, QObject* parent) : QObject(parent), m_accessToken(accessToken) {
                 m_pNetwork = new QNetworkAccessManager(this);
             }
 
             TrackController::~TrackController() {
                 m_pNetwork->deleteLater();
+            }
+
+            void TrackController::setAccessToken(const QString& accessToken) {
+                m_accessToken = accessToken;
             }
 
             void TrackController::updateNowPlaying(const QString& artist, const QString& track, const QString& album) {
@@ -36,7 +40,7 @@ namespace bb {
                 req.setUrl(url);
                 req.setRawHeader("Content-Type", "application/x-www-form-urlencoded");
 
-                QString sk = m_settings.value(LAST_FM_KEY).toString();
+                QString sk = m_accessToken;
                 QString sig = QString("api_key").append(API_KEY)
                             .append("artist").append(artist.toUtf8())
                             .append("method").append(TRACK_UPDATE_NOW_PLAYING)
@@ -85,7 +89,7 @@ namespace bb {
                 req.setUrl(url);
                 req.setRawHeader("Content-Type", "application/x-www-form-urlencoded");
 
-                QString sk = m_settings.value(LAST_FM_KEY).toString();
+                QString sk = m_accessToken;
                 QString sig = QString("api_key").append(API_KEY)
                                 .append("artist").append(artist.toUtf8())
                                 .append("method").append(TRACK_SCROBBLE)

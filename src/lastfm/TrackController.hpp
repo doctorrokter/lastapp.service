@@ -12,7 +12,6 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
-#include <QSettings>
 #include "../Logger.hpp"
 
 namespace bb {
@@ -21,11 +20,13 @@ namespace bb {
             class TrackController: public QObject {
                 Q_OBJECT
             public:
-                TrackController(QObject* parent = 0);
+                TrackController(const QString& accessToken = "", QObject* parent = 0);
                 virtual ~TrackController();
 
                 Q_INVOKABLE void updateNowPlaying(const QString& artist, const QString& track, const QString& album = "");
                 Q_INVOKABLE void scrobble(const QString& artist, const QString& track, const int& timestamp, const QString& album = "");
+
+                void setAccessToken(const QString& accessToken);
 
                 Q_SIGNALS:
                     void nowPlayingUpdated();
@@ -39,8 +40,8 @@ namespace bb {
             private:
                 static Logger logger;
 
-                QSettings m_settings;
                 QNetworkAccessManager* m_pNetwork;
+                QString m_accessToken;
             };
         }
     }

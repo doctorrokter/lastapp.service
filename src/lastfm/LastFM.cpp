@@ -17,8 +17,8 @@ using namespace bb::data;
 namespace bb {
     namespace lastfm {
 
-        LastFM::LastFM(QObject* parent) : QObject(parent) {
-            m_pTrack = new TrackController(this);
+        LastFM::LastFM(const QString& accessToken, QObject* parent) : QObject(parent) {
+            m_pTrack = new TrackController(accessToken, this);
         }
 
         LastFM::~LastFM() {
@@ -39,6 +39,10 @@ namespace bb {
             body.addQueryItem("api_key", API_KEY);
             body.addQueryItem("format", "json");
             return body;
+        }
+
+        void LastFM::setAccessToken(const QString& accessToken) {
+            m_pTrack->setAccessToken(accessToken);
         }
 
         TrackController* LastFM::getTrackController() const { return m_pTrack; }

@@ -24,10 +24,10 @@
 #include <bb/multimedia/NowPlayingController>
 #include <bb/multimedia/MediaState>
 #include <QNetworkConfigurationManager>
+#include <QFileSystemWatcher>
 #include <QTimer>
 #include "lastfm/LastFM.hpp"
 #include "Logger.hpp"
-#include "communication/HeadlessCommunication.hpp"
 
 namespace bb {
     class Application;
@@ -101,18 +101,15 @@ private slots:
     void onOnlineChanged(bool online);
     void mediaStateChanged(bb::multimedia::MediaState::Type state);
     void onTimeout();
-    void processCommandFromUI(const QString& command);
-    void closeCommunication();
-    void onConnectedWithUI();
+    void onFileChanged(const QString& path);
 
 private:
     void notify();
     void triggerNotification();
     void doScrobble(Track& track);
     void storeScrobbles(const QVariantList& scrobbles);
-    void switchScrobbler(const bool& fromUI = false);
-    void switchHubNotifications(const bool& fromUI = false);
-    void establishCommunication();
+    void switchScrobbler();
+    void switchHubNotifications();
     QVariantList restoreScrobbles();
 
     Notification* m_notify;
@@ -120,7 +117,7 @@ private:
     NowPlayingController* m_pNpc;
     QNetworkConfigurationManager* m_pNetworkConf;
     LastFM* m_pLastFM;
-    HeadlessCommunication* m_pCommunication;
+    QFileSystemWatcher* m_pWatcher;
 
     Track m_track;
     bool m_online;

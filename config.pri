@@ -33,8 +33,6 @@ simulator {
 config_pri_source_group1 {
     SOURCES += \
         $$quote($$BASEDIR/src/Logger.cpp) \
-        $$quote($$BASEDIR/src/Settings.cpp) \
-        $$quote($$BASEDIR/src/communication/HeadlessCommunication.cpp) \
         $$quote($$BASEDIR/src/lastfm/LastFM.cpp) \
         $$quote($$BASEDIR/src/lastfm/TrackController.cpp) \
         $$quote($$BASEDIR/src/main.cpp) \
@@ -43,8 +41,6 @@ config_pri_source_group1 {
 
     HEADERS += \
         $$quote($$BASEDIR/src/Logger.hpp) \
-        $$quote($$BASEDIR/src/Settings.hpp) \
-        $$quote($$BASEDIR/src/communication/HeadlessCommunication.hpp) \
         $$quote($$BASEDIR/src/lastfm/LastFM.hpp) \
         $$quote($$BASEDIR/src/lastfm/LastFMCommon.hpp) \
         $$quote($$BASEDIR/src/lastfm/TrackController.hpp) \
@@ -63,11 +59,6 @@ lupdate_inclusion {
         $$quote($$BASEDIR/../src/*.cc) \
         $$quote($$BASEDIR/../src/*.cpp) \
         $$quote($$BASEDIR/../src/*.cxx) \
-        $$quote($$BASEDIR/../src/communication/*.c) \
-        $$quote($$BASEDIR/../src/communication/*.c++) \
-        $$quote($$BASEDIR/../src/communication/*.cc) \
-        $$quote($$BASEDIR/../src/communication/*.cpp) \
-        $$quote($$BASEDIR/../src/communication/*.cxx) \
         $$quote($$BASEDIR/../src/lastfm/*.c) \
         $$quote($$BASEDIR/../src/lastfm/*.c++) \
         $$quote($$BASEDIR/../src/lastfm/*.cc) \
